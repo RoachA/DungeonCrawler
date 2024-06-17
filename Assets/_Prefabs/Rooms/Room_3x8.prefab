@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 7806007252631570535}
   m_Layer: 0
   m_Name: Room_3x8
-  m_TagString: Untagged
+  m_TagString: Room
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -50,6 +50,7 @@ MonoBehaviour:
     MaxDoorCount: 1
   _wallObj: {fileID: 919132149155446097, guid: 538140e91cac34c4a969b8d5ef8282a7, type: 3}
   _doorObj: {fileID: 919132149155446097, guid: e50a2a0c3b79b2648bd5dc9c3cbc75f7, type: 3}
+  _floorCollider: {fileID: 5148294181664105530}
 --- !u!1001 &8694832160418787929
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -116,8 +117,39 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: fccfaeb991e5d8545b63582b6624f045,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5148294181664105530}
   m_SourcePrefab: {fileID: 100100000, guid: fccfaeb991e5d8545b63582b6624f045, type: 3}
+--- !u!1 &8388893399426158344 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: fccfaeb991e5d8545b63582b6624f045,
+    type: 3}
+  m_PrefabInstance: {fileID: 8694832160418787929}
+  m_PrefabAsset: {fileID: 0}
+--- !u!65 &5148294181664105530
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8388893399426158344}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 2.9999995, y: 0.05, z: 7.999999}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!4 &9160469754586731954 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: fccfaeb991e5d8545b63582b6624f045,

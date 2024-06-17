@@ -31,14 +31,11 @@ namespace Game.Rooms
         private List<Vector3> _roomCorners = new List<Vector3>();
         private List<WallOrientation> _wallTransforms = new List<WallOrientation>();
         private GameObject _wallsContainer;
+        [SerializeField] private Collider _floorCollider;
 
         //todo can be bound to a one time setup.
         //todo these shall work with rotation too :)( 
         //todo or instantiate with vector3.zero, handle doors and walls etc and go on.
-
-        private void Start()
-        {
-        }
 
         private List<Vector3> FindRoomBounds()
         {
@@ -52,8 +49,16 @@ namespace Game.Rooms
             corners.Add(new Vector3(localPos.x - x / 2, localPos.y, localPos.z - y / 2));
             corners.Add(new Vector3(localPos.x + x / 2, localPos.y, localPos.z - y / 2));
 
+            GetFloorCollider();
+
             _roomCorners = corners;
             return corners;
+        }
+
+        public Collider GetFloorCollider()
+        {
+            _floorCollider = GetComponentInChildren<Collider>();
+            return _floorCollider;
         }
 
         private List<WallOrientation> FindWallPlacementPoints()

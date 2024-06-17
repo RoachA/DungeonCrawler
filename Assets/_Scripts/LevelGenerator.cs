@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -14,6 +15,9 @@ namespace Game.Rooms
         [SerializeField] private List<RoomView> _roomTemplates;
 
         [SerializeField] private List<RoomView> _rooms = new List<RoomView>();
+        [SerializeField] [Range(1, 10)] private int _padding = 2;
+
+        private List<Collider> _roomFloorColliders = new List<Collider>();
 
         [Button]
         private void GenerateRooms()
@@ -55,9 +59,12 @@ namespace Game.Rooms
             }
         }
 
-        private void RandomizePositions()
+        private async void RandomizePositions()
         {
             if (_rooms == null || _rooms.Count == 0) return;
+            if (_roomFloorColliders != null && _roomFloorColliders.Count != 0) _roomFloorColliders.Clear();
+
+            _roomFloorColliders = new List<Collider>();
 
             foreach (var room in _rooms)
             {
@@ -65,10 +72,31 @@ namespace Game.Rooms
                 float randomZ = Random.Range(-_layoutData.Bounds.y / 2, _layoutData.Bounds.y / 2);
                 room.transform.position =
                     new Vector3(Mathf.RoundToInt(randomX), room.transform.position.y, Mathf.RoundToInt(randomZ));
+                _roomFloorColliders.Add(room.GetFloorCollider());
             }
+
+            await FixCollidingRoomsAsync();
         }
 
-        //todo fix positions if interwined
+        private async Task FixCollidingRoomsAsync()
+        {
+            var collidingRooms = LevelGenLayoutHelper.CheckForCollidingRooms(_roomFloorColliders);
+            if (collidingRooms.Count == 0) return;
+
+            foreach (var collisionRoom in collidingRooms)
+            {
+                var offset = LevelGenLayoutHelper.GenerateRandomAxisAlignedUnitVector() * _padding;
+                if (LevelGenLayoutHelper.IsWithinBounds(offset + collisionRoom.transform.parent.position, _layoutData.Bounds))
+                    collisionRoom.transform.parent.position += offset;
+            }
+
+            // Add a small delay to allow for async behavior and prevent stack overflow
+            await Task.Delay(1);
+
+            // Call the method recursively
+            await FixCollidingRoomsAsync();
+        }
+
 
         //get doors into list
 
