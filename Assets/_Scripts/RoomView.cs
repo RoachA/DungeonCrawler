@@ -81,7 +81,7 @@ namespace Game.Rooms
             for (int i = 1; i < y + 1; i++)
             {
                 pos = new Vector3(_roomCorners[1].x, _roomCorners[1].y, _roomCorners[1].z - i + 0.5f);
-                rot = new Vector3(0, 90, 0);
+                rot = new Vector3(0, -90, 0);
                 wallPoints.Add(new WallOrientation(pos, rot));
             }
 
@@ -184,7 +184,7 @@ namespace Game.Rooms
             foreach (var pos in FindRoomBounds())
             {
                 Gizmos.color = Color.yellow;
-                //Handles.Label(pos + Vector3.up / 3, index.ToString());
+                Handles.Label(pos + Vector3.up / 3, index.ToString());
                 Gizmos.DrawSphere(pos, 0.1f);
                 index++;
             }
@@ -193,7 +193,7 @@ namespace Game.Rooms
             foreach (var orientation in FindWallPlacementPoints())
             {
                 Gizmos.color = Color.red;
-                // Handles.Label(orientation.Pos + Vector3.up / 3, index.ToString());
+                Handles.Label(orientation.Pos + Vector3.up / 3, index.ToString());
                 Gizmos.DrawSphere(orientation.Pos, 0.05f);
                 index++;
             }

@@ -46,7 +46,7 @@ namespace Game.Rooms
                 room.GenerateRoom();
             }
         }
-        
+
         [Button]
         private void ClearLevel()
         {
