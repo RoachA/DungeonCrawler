@@ -47,7 +47,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _roomConstructionData:
     Dimensions: {x: 8, y: 3}
-    MaxDoorCount: 1
+    MaxDoorCount: 3
   _wallObj: {fileID: 919132149155446097, guid: 538140e91cac34c4a969b8d5ef8282a7, type: 3}
   _doorObj: {fileID: 919132149155446097, guid: e50a2a0c3b79b2648bd5dc9c3cbc75f7, type: 3}
   _floorCollider: {fileID: 5148294181664105530}

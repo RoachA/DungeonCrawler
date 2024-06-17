@@ -103,6 +103,11 @@ namespace Game.Rooms
             return wallPoints;
         }
 
+        public List<GameObject> GetDoors()
+        {
+            return _doors;
+        }
+
         [Button]
         public void GenerateRoom()
         {

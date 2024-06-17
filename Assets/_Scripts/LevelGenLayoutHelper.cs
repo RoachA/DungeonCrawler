@@ -39,10 +39,10 @@ namespace Game.Rooms
 
             return false;
         }
-
+        
         public static bool IsWithinBounds(Vector3 vector, Vector2 bounds)
         {
-            bounds -= new Vector2(5, 5);
+            bounds -= new Vector2(5, 5); 
             return vector.x >= -bounds.x / 2 && vector.x <= bounds.x / 2 &&
                    vector.z >= -bounds.y / 2 && vector.z <= bounds.y / 2;
         }

@@ -1,5 +1,3 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Sirenix.OdinInspector;
@@ -20,7 +18,7 @@ namespace Game.Rooms
         private List<Collider> _roomFloorColliders = new List<Collider>();
 
         [Button]
-        private void GenerateRooms()
+        private async void GenerateRooms()
         {
             if (_roomTemplates == null || _roomTemplates.Count == 0) return;
 
@@ -38,13 +36,17 @@ namespace Game.Rooms
             {
                 var rndPick = Random.Range(0, _roomTemplates.Count);
                 var newRoom = Instantiate(_roomTemplates[rndPick], Vector3.zero, Quaternion.identity, transform);
-                newRoom.GenerateRoom();
                 _rooms.Add(newRoom);
             }
 
-            RandomizePositions();
-        }
+            await RandomizePositions();
 
+            foreach (var room in _rooms)
+            {
+                room.GenerateRoom();
+            }
+        }
+        
         [Button]
         private void ClearLevel()
         {
@@ -59,7 +61,7 @@ namespace Game.Rooms
             }
         }
 
-        private async void RandomizePositions()
+        private async Task RandomizePositions()
         {
             if (_rooms == null || _rooms.Count == 0) return;
             if (_roomFloorColliders != null && _roomFloorColliders.Count != 0) _roomFloorColliders.Clear();
