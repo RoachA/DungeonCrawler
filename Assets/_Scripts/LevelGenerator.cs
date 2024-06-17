@@ -1,8 +1,17 @@
 using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 using System.Threading.Tasks;
+using DelaunatorSharp;
+using DelaunatorSharp.Unity.Extensions;
+using DelaunayTriangulation;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using Quaternion = UnityEngine.Quaternion;
 using Random = UnityEngine.Random;
+using Triangle = DelaunayTriangulation.Triangle;
+using Vector2 = UnityEngine.Vector2;
+using Vector3 = UnityEngine.Vector3;
 
 namespace Game.Rooms
 {
@@ -16,6 +25,11 @@ namespace Game.Rooms
         [SerializeField] [Range(1, 10)] private int _padding = 2;
 
         private List<Collider> _roomFloorColliders = new List<Collider>();
+        private List<Vector3> _doorPositions = new List<Vector3>();
+        
+        private List<IPoint> _hullpPoints = new List<IPoint>();
+        private List<Triangle> _triangles = new List<Triangle>();
+        private List<ITriangle> _delaunatorTriangles = new List<ITriangle>();
 
         [Button]
         private async void GenerateRooms()
@@ -44,6 +58,49 @@ namespace Game.Rooms
             foreach (var room in _rooms)
             {
                 room.GenerateRoom();
+            }
+
+            //Triangulate();
+            Triangulate2();
+        }
+        
+        private void Triangulate2()
+        {
+            List<Vertex> points = new List<Vertex>();
+
+            for (int i = 0; i < _rooms.Count; i++)
+            {
+                var pos = new Vector2(_rooms[i].transform.position.x, _rooms[i].transform.position.z);
+                points.Add(new Vertex(pos, i));
+                Debug.Log(pos);
+            }
+            
+            _hullpPoints.Clear();
+
+            var triangulator = new Triangulation(points);
+            _triangles = triangulator.triangles;
+        }
+
+        private void Triangulate()
+        {
+            var points = new IPoint[_rooms.Count];
+            _hullpPoints.Clear();
+
+            for (int i = 0; i < points.Length; i++)
+            {
+                points[i] = new Point(_rooms[i].transform.position.x, _rooms[i].transform.position.z);
+                Debug.Log(points[i]);
+            }
+            
+            var delaunay = new Delaunator(points);
+            _delaunatorTriangles = delaunay.GetTriangles().ToList();
+           // delaunay.gettr
+            
+            var hullPoints = delaunay.GetHullPoints();
+
+            foreach (var triPoint in hullPoints)
+            {
+                _hullpPoints.Add(triPoint);
             }
         }
 
@@ -111,8 +168,60 @@ namespace Game.Rooms
         private void OnDrawGizmos()
         {
             Gizmos.color = Color.white;
-            Gizmos.DrawWireCube(Vector3.zero,
-                new Vector3(_layoutData.Bounds.x, 0, _layoutData.Bounds.y));
+            Gizmos.DrawWireCube(Vector3.zero, new Vector3(_layoutData.Bounds.x, 0, _layoutData.Bounds.y));
+
+            /*if (_edgePoints != null || _edgePoints?.Count != 0)
+            {
+                for (int i = 0; i < _edgePoints.Count; i++)
+                {
+                    if (i == 0) continue;
+
+                    Gizmos.color = Color.yellow;
+                    var pointA = new Vector3(_edgePoints[i].x, 0, _edgePoints[i].y);
+                    var pointB = new Vector3(_edgePoints[i - 1].x, 0, _edgePoints[i - 1].y);
+
+                    Gizmos.DrawLine(pointA, pointB);
+                }
+            }*/
+
+            if (_triangles == null) return;
+
+            Gizmos.color = Color.green * 0.7f;
+            foreach (Triangle triangle in _triangles)
+            {
+                var vertPos0 = new Vector3(triangle.vertex0.position.x, 0, triangle.vertex0.position.y);
+                var vertPos1 = new Vector3(triangle.vertex1.position.x, 0, triangle.vertex1.position.y);
+                var vertPos2 = new Vector3(triangle.vertex2.position.x, 0, triangle.vertex2.position.y);
+
+                Gizmos.DrawLine(vertPos0, vertPos1);
+                Gizmos.DrawLine(vertPos1, vertPos2);
+                Gizmos.DrawLine(vertPos2, vertPos0);
+            }
+            
+            //todo shall handle it for the delaunator somehow. it is better!
+            /*
+            if (_delaunatorTriangles == null) return;
+            foreach (ITriangle triangle in _delaunatorTriangles)
+            {
+                var vertPos0 = new Vector3(triangle.Points.GetEnumerator().Current.X, 
+                /*var vertPos0 = new Vector3(triangle.vertex0.position.x, 0, triangle.vertex0.position.y);
+                var vertPos1 = new Vector3(triangle.vertex1.position.x, 0, triangle.vertex1.position.y);
+                var vertPos2 = new Vector3(triangle.vertex2.position.x, 0, triangle.vertex2.position.y);#1#
+
+                Gizmos.DrawLine(vertPos0, vertPos1);
+                Gizmos.DrawLine(vertPos1, vertPos2);
+                Gizmos.DrawLine(vertPos2, vertPos0);
+            }
+            */
+            
+
+            if (_hullpPoints == null || _hullpPoints.Count == 0) return;
+
+            Gizmos.color = Color.red;
+            foreach (var trianglePoint in _hullpPoints)
+            {
+                Gizmos.DrawWireSphere(new Vector3((float) trianglePoint.X, 0, (float) trianglePoint.Y), 0.45f);
+            }
         }
     }
 }
