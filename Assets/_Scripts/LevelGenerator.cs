@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using System.Threading.Tasks;
 using DelaunatorSharp;
-using DelaunatorSharp.Unity.Extensions;
 using DelaunayTriangulation;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -26,7 +24,7 @@ namespace Game.Rooms
 
         private List<Collider> _roomFloorColliders = new List<Collider>();
         private List<Vector3> _doorPositions = new List<Vector3>();
-        
+
         private List<IPoint> _hullpPoints = new List<IPoint>();
         private List<Triangle> _triangles = new List<Triangle>();
         private List<ITriangle> _delaunatorTriangles = new List<ITriangle>();
@@ -63,7 +61,7 @@ namespace Game.Rooms
             //Triangulate();
             Triangulate2();
         }
-        
+
         private void Triangulate2()
         {
             List<Vertex> points = new List<Vertex>();
@@ -74,7 +72,7 @@ namespace Game.Rooms
                 points.Add(new Vertex(pos, i));
                 Debug.Log(pos);
             }
-            
+
             _hullpPoints.Clear();
 
             var triangulator = new Triangulation(points);
@@ -91,11 +89,11 @@ namespace Game.Rooms
                 points[i] = new Point(_rooms[i].transform.position.x, _rooms[i].transform.position.z);
                 Debug.Log(points[i]);
             }
-            
+
             var delaunay = new Delaunator(points);
             _delaunatorTriangles = delaunay.GetTriangles().ToList();
-           // delaunay.gettr
-            
+            // delaunay.gettr
+
             var hullPoints = delaunay.GetHullPoints();
 
             foreach (var triPoint in hullPoints)
@@ -186,18 +184,34 @@ namespace Game.Rooms
 
             if (_triangles == null) return;
 
-            Gizmos.color = Color.green * 0.7f;
+            Gizmos.color = Color.white * 0.3f;
+            List<Vector3> triPoints = new List<Vector3>();
+
             foreach (Triangle triangle in _triangles)
             {
+                //can get and cache vertices here actually.
                 var vertPos0 = new Vector3(triangle.vertex0.position.x, 0, triangle.vertex0.position.y);
                 var vertPos1 = new Vector3(triangle.vertex1.position.x, 0, triangle.vertex1.position.y);
                 var vertPos2 = new Vector3(triangle.vertex2.position.x, 0, triangle.vertex2.position.y);
+
+                triPoints.Add(vertPos0);
+                triPoints.Add(vertPos1);
+                triPoints.Add(vertPos2);
 
                 Gizmos.DrawLine(vertPos0, vertPos1);
                 Gizmos.DrawLine(vertPos1, vertPos2);
                 Gizmos.DrawLine(vertPos2, vertPos0);
             }
-            
+
+            var edgesAq = MstHelper.KruskalMST(triPoints);
+
+            Gizmos.color = Color.green;
+
+            foreach (var edge in edgesAq)
+            {
+                Gizmos.DrawLine(triPoints[edge.Source] + Vector3.up, triPoints[edge.Destination] + Vector3.up);
+            }
+
             //todo shall handle it for the delaunator somehow. it is better!
             /*
             if (_delaunatorTriangles == null) return;
@@ -213,7 +227,7 @@ namespace Game.Rooms
                 Gizmos.DrawLine(vertPos2, vertPos0);
             }
             */
-            
+
 
             if (_hullpPoints == null || _hullpPoints.Count == 0) return;
 
