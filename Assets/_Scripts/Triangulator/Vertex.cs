@@ -10,19 +10,13 @@ namespace DelaunayTriangulation
         private Vector2 m_Position;
         public Vector2 position
         {
-            get
-            {
-                return m_Position;
-            }
+            get { return m_Position; }
         }
 
         private int m_Index;
         public int index
         {
-            get
-            {
-                return m_Index;
-            }
+            get { return m_Index; }
         }
 
         public Vertex(Vector2 position, int index)
@@ -34,7 +28,7 @@ namespace DelaunayTriangulation
         public override bool Equals(object obj)
         {
             Vertex other = obj as Vertex;
-            
+
             if (other == null)
             {
                 return false;

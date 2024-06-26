@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DelaunatorSharp;
 using DelaunayTriangulation;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -10,9 +9,44 @@ using Random = UnityEngine.Random;
 using Triangle = DelaunayTriangulation.Triangle;
 using Vector2 = UnityEngine.Vector2;
 using Vector3 = UnityEngine.Vector3;
+using Game.Rooms.Utils.Mst;
+using Game.Rooms.Utils.Astar;
+using Unity.Mathematics;
 
 namespace Game.Rooms
 {
+    public class LevelGrid
+    {
+        public int Height { get; private set; }
+        public int Width { get; private set; }
+        public List<Vector2Int> Units { get; private set; }
+
+        public LevelGrid(Vector2Int size)
+        {
+            Height = size.y;
+            Width = size.x;
+            Units = GenerateGrid(size);
+        }
+
+        private List<Vector2Int> GenerateGrid(Vector2Int size)
+        {
+            List<Vector2Int> grid = new List<Vector2Int>();
+
+            int halfWidth = size.x / 2;
+            int halfHeight = size.y / 2;
+
+            for (int i = -halfWidth; i <= halfWidth; i++)
+            {
+                for (int j = -halfHeight; j <= halfHeight; j++)
+                {
+                    grid.Add(new Vector2Int(i, j));
+                }
+            }
+
+            return grid;
+        }
+    }
+
     public class LevelGenerator : MonoBehaviour
     {
         [SerializeField] private LevelLayoutData _layoutData;
@@ -24,13 +58,40 @@ namespace Game.Rooms
 
         private List<Collider> _roomFloorColliders = new List<Collider>();
         private List<Vector3> _doorPositions = new List<Vector3>();
-
-        private List<IPoint> _hullpPoints = new List<IPoint>();
-        private List<Triangle> _triangles = new List<Triangle>();
-        private List<ITriangle> _delaunatorTriangles = new List<ITriangle>();
+        private List<Triangle> _delaunayMesh = new List<Triangle>(); //the triangles that form the delaunay mesh
+        private List<MstHelper.Edge> _hallWayEdges = new List<MstHelper.Edge>();
+        
+        private LevelGrid _levelGrid;
+        private bool _isProcessingLevel;
 
         [Button]
-        private async void GenerateRooms()
+        private async void GenerateLevel()
+        {
+            _isProcessingLevel = true;
+
+            GenerateGrid();
+            await GenerateRoom();
+            Triangulate();
+            SetHallways();
+
+            _isProcessingLevel = false;
+        }
+
+        [Button]
+        private void ClearLevel()
+        {
+            if (_rooms != null)
+            {
+                foreach (var room in _rooms)
+                {
+                    DestroyImmediate(room.gameObject);
+                }
+
+                _rooms.Clear();
+            }
+        }
+
+        private async Task GenerateRoom()
         {
             if (_roomTemplates == null || _roomTemplates.Count == 0) return;
 
@@ -57,12 +118,14 @@ namespace Game.Rooms
             {
                 room.GenerateRoom();
             }
-
-            //Triangulate();
-            Triangulate2();
         }
 
-        private void Triangulate2()
+        private void GenerateGrid()
+        {
+            _levelGrid = new LevelGrid(_layoutData.Bounds - Vector2Int.one);
+        }
+
+        private void Triangulate()
         {
             List<Vertex> points = new List<Vertex>();
 
@@ -73,47 +136,38 @@ namespace Game.Rooms
                 Debug.Log(pos);
             }
 
-            _hullpPoints.Clear();
-
             var triangulator = new Triangulation(points);
-            _triangles = triangulator.triangles;
+            _delaunayMesh = triangulator.triangles;
         }
+        
+        private List<Vector2Int> _pathDebug = new List<Vector2Int>();
 
-        private void Triangulate()
+        private void SetHallways()
         {
-            var points = new IPoint[_rooms.Count];
-            _hullpPoints.Clear();
+            List<Vector2> triPoints = new List<Vector2>();
 
-            for (int i = 0; i < points.Length; i++)
+            foreach (Triangle triangle in _delaunayMesh)
             {
-                points[i] = new Point(_rooms[i].transform.position.x, _rooms[i].transform.position.z);
-                Debug.Log(points[i]);
+                //can get and cache vertices here actually.
+                var vertPos0 = new Vector2(triangle.vertex0.position.x, triangle.vertex0.position.y);
+                var vertPos1 = new Vector2(triangle.vertex1.position.x, triangle.vertex1.position.y);
+                var vertPos2 = new Vector2(triangle.vertex2.position.x, triangle.vertex2.position.y);
+
+                triPoints.Add(vertPos0);
+                triPoints.Add(vertPos1);
+                triPoints.Add(vertPos2);
             }
 
-            var delaunay = new Delaunator(points);
-            _delaunatorTriangles = delaunay.GetTriangles().ToList();
-            // delaunay.gettr
+            _hallWayEdges = MstHelper.KruskalMST(triPoints);
 
-            var hullPoints = delaunay.GetHullPoints();
+            //draw
+            AStar aStar = new AStar(_levelGrid.Units);
 
-            foreach (var triPoint in hullPoints)
-            {
-                _hullpPoints.Add(triPoint);
-            }
-        }
+            var posA = Vector2Int.RoundToInt(triPoints[_hallWayEdges[0].Source]);
+            var posB = Vector2Int.RoundToInt(triPoints[_hallWayEdges[1].Source]);
 
-        [Button]
-        private void ClearLevel()
-        {
-            if (_rooms != null)
-            {
-                foreach (var room in _rooms)
-                {
-                    DestroyImmediate(room.gameObject);
-                }
-
-                _rooms.Clear();
-            }
+            var pathNodes = aStar.FindPath(posA, posB);
+            _pathDebug = pathNodes;
         }
 
         private async Task RandomizePositions()
@@ -129,7 +183,14 @@ namespace Game.Rooms
                 float randomZ = Random.Range(-_layoutData.Bounds.y / 2, _layoutData.Bounds.y / 2);
                 room.transform.position =
                     new Vector3(Mathf.RoundToInt(randomX), room.transform.position.y, Mathf.RoundToInt(randomZ));
-                _roomFloorColliders.Add(room.GetFloorCollider());
+
+                var floorCollider = room.GetFloorCollider();
+                _roomFloorColliders.Add(floorCollider);
+
+                //fix half offsets
+
+                if (Mathf.RoundToInt(floorCollider.bounds.size.x) % 2 == 0) room.transform.position += Vector3.right * 0.5f;
+                if (Mathf.RoundToInt(floorCollider.bounds.size.z) % 2 == 0) room.transform.position += Vector3.up * 0.5f;
             }
 
             await FixCollidingRoomsAsync();
@@ -150,92 +211,69 @@ namespace Game.Rooms
             // Add a small delay to allow for async behavior and prevent stack overflow
             await Task.Delay(1);
 
-            // Call the method recursively
             await FixCollidingRoomsAsync();
         }
 
-
-        //get doors into list
-
-        //triangulate to find closest distances
-
-        //*A for finding paths
-
-        //build corridors :< 
-
         private void OnDrawGizmos()
         {
+            //show bounds
             Gizmos.color = Color.white;
-            Gizmos.DrawWireCube(Vector3.zero, new Vector3(_layoutData.Bounds.x, 0, _layoutData.Bounds.y));
+            Gizmos.DrawWireCube(Vector3.zero, new Vector3(_layoutData.Bounds.x - 0.5f, 0, _layoutData.Bounds.y - 0.5f));
 
-            /*if (_edgePoints != null || _edgePoints?.Count != 0)
+            //show grid
+
+            if (_levelGrid == null) return;
+            foreach (var unit in _levelGrid.Units)
             {
-                for (int i = 0; i < _edgePoints.Count; i++)
-                {
-                    if (i == 0) continue;
-
-                    Gizmos.color = Color.yellow;
-                    var pointA = new Vector3(_edgePoints[i].x, 0, _edgePoints[i].y);
-                    var pointB = new Vector3(_edgePoints[i - 1].x, 0, _edgePoints[i - 1].y);
-
-                    Gizmos.DrawLine(pointA, pointB);
-                }
-            }*/
-
-            if (_triangles == null) return;
-
-            Gizmos.color = Color.white * 0.3f;
-            List<Vector3> triPoints = new List<Vector3>();
-
-            foreach (Triangle triangle in _triangles)
-            {
-                //can get and cache vertices here actually.
-                var vertPos0 = new Vector3(triangle.vertex0.position.x, 0, triangle.vertex0.position.y);
-                var vertPos1 = new Vector3(triangle.vertex1.position.x, 0, triangle.vertex1.position.y);
-                var vertPos2 = new Vector3(triangle.vertex2.position.x, 0, triangle.vertex2.position.y);
-
-                triPoints.Add(vertPos0);
-                triPoints.Add(vertPos1);
-                triPoints.Add(vertPos2);
-
-                Gizmos.DrawLine(vertPos0, vertPos1);
-                Gizmos.DrawLine(vertPos1, vertPos2);
-                Gizmos.DrawLine(vertPos2, vertPos0);
+                Gizmos.color = Color.white * 0.15f;
+                Gizmos.DrawWireCube(new Vector3(unit.x, 0, unit.y), new Vector3(1, 0, 1));
             }
 
-            var edgesAq = MstHelper.KruskalMST(triPoints);
+            if (_delaunayMesh == null) return;
+
+            Gizmos.color = Color.white * 0.5f;
+            List<Vector2> triPoints = new List<Vector2>();
+
+            if (_isProcessingLevel) return;
+
+
+            foreach (Triangle triangle in _delaunayMesh)
+            {
+                //can get and cache vertices here actually.
+                var vertPos0 = new Vector2(triangle.vertex0.position.x, triangle.vertex0.position.y);
+                var vertPos1 = new Vector2(triangle.vertex1.position.x, triangle.vertex1.position.y);
+                var vertPos2 = new Vector2(triangle.vertex2.position.x, triangle.vertex2.position.y);
+
+
+                triPoints.Add((vertPos0));
+                triPoints.Add((vertPos1));
+                triPoints.Add((vertPos2));
+
+                Gizmos.DrawLine(new Vector3(vertPos0.x, 0, vertPos0.y), new Vector3(vertPos1.x, 0, vertPos1.y));
+                Gizmos.DrawLine(new Vector3(vertPos1.x, 0, vertPos1.y), new Vector3(vertPos2.x, 0, vertPos2.y));
+                Gizmos.DrawLine(new Vector3(vertPos2.x, 0, vertPos2.y), new Vector3(vertPos0.x, 0, vertPos0.y));
+            }
 
             Gizmos.color = Color.green;
 
-            foreach (var edge in edgesAq)
+            foreach (var edge in _hallWayEdges)
             {
-                Gizmos.DrawLine(triPoints[edge.Source] + Vector3.up, triPoints[edge.Destination] + Vector3.up);
+                var source = new Vector3(triPoints[edge.Source].x, 1, triPoints[edge.Source].y);
+                var destination = new Vector3(triPoints[edge.Destination].x, 1, triPoints[edge.Destination].y);
+                Gizmos.DrawLine(source, destination);
             }
 
+            if (_pathDebug == null) return;
+            
+            foreach (var pos in _pathDebug)
+            {
+                Gizmos.color = Color.red * 0.7f;
+                Gizmos.DrawCube(new Vector3(pos.x, 0, pos.y), new Vector3(0.95f, 0.1f, 0.95f));
+            }
+
+            //TODO now I shall convert all this into a usable data set that corresponds to rooms - corridors etc... GG
+            //%todo 15 percent chose random edges as extra corridors.
             //todo shall handle it for the delaunator somehow. it is better!
-            /*
-            if (_delaunatorTriangles == null) return;
-            foreach (ITriangle triangle in _delaunatorTriangles)
-            {
-                var vertPos0 = new Vector3(triangle.Points.GetEnumerator().Current.X, 
-                /*var vertPos0 = new Vector3(triangle.vertex0.position.x, 0, triangle.vertex0.position.y);
-                var vertPos1 = new Vector3(triangle.vertex1.position.x, 0, triangle.vertex1.position.y);
-                var vertPos2 = new Vector3(triangle.vertex2.position.x, 0, triangle.vertex2.position.y);#1#
-
-                Gizmos.DrawLine(vertPos0, vertPos1);
-                Gizmos.DrawLine(vertPos1, vertPos2);
-                Gizmos.DrawLine(vertPos2, vertPos0);
-            }
-            */
-
-
-            if (_hullpPoints == null || _hullpPoints.Count == 0) return;
-
-            Gizmos.color = Color.red;
-            foreach (var trianglePoint in _hullpPoints)
-            {
-                Gizmos.DrawWireSphere(new Vector3((float) trianglePoint.X, 0, (float) trianglePoint.Y), 0.45f);
-            }
         }
     }
 }
