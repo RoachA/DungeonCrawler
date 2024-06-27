@@ -65,5 +65,30 @@ namespace Game.Rooms
                     return Vector3.zero; // Fallback, though this should never be reached
             }
         }
+        
+        public static List<Vector2Int> CheckPositionsWithinRoomBounds(List<Vector2Int> positions, List<Collider> colliders)
+        {
+            List<Vector2Int> positionsWithinBounds = new List<Vector2Int>();
+
+            foreach (var pos in positions)
+            {
+                foreach (var col in colliders)
+                {
+                    if (IsPositionWithinCollider(new Vector3(pos.x, 0, pos.y), col))
+                    {
+                        positionsWithinBounds.Add(pos);
+                        break; // No need to check other colliders if one already contains the position
+                    }
+                }
+            }
+
+            return positionsWithinBounds;
+        }
+
+        public static bool IsPositionWithinCollider(Vector3 position, Collider collider)
+        {
+            Vector3 closestPoint = collider.ClosestPoint(position);
+            return Vector3.Distance(closestPoint, position) < Mathf.Epsilon;
+        }
     }
 }

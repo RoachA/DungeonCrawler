@@ -1,91 +1,88 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+//a star here is shiet
 namespace Game.Rooms.Utils.Astar
 {
     public class AStar
     {
-        private List<Vector2Int> positions;
-        private List<Vector2Int> directions = new List<Vector2Int>
+        private class Node
         {
-            new Vector2Int(0, 1),
-            new Vector2Int(1, 0),
-            new Vector2Int(0, -1),
-            new Vector2Int(-1, 0)
-        };
+            public Vector2Int Position { get; set; }
+            public Node Parent { get; set; }
+            public float GCost { get; set; }
+            public float HCost { get; set; }
+            public float FCost => GCost + HCost;
 
-        public AStar(List<Vector2Int> positions)
-        {
-            this.positions = positions;
+            public Node(Vector2Int position)
+            {
+                Position = position;
+            }
         }
 
-        public List<Vector2Int> FindPath(Vector2Int start, Vector2Int end)
+        public static List<Vector2Int> FindPath(Vector2Int start, Vector2Int target, HashSet<Vector2Int> grid, float cellSize = 1)
         {
+            PriorityQueue<Node> openSet = new PriorityQueue<Node>(Comparer<Node>.Create((a, b) => a.FCost.CompareTo(b.FCost)));
+            HashSet<Vector2Int> closedSet = new HashSet<Vector2Int>();
+
             Node startNode = new Node(start);
-            Node endNode = new Node(end);
+            Node targetNode = new Node(target);
 
-            List<Node> openList = new List<Node>();
-            HashSet<Node> closedList = new HashSet<Node>();
+            openSet.Enqueue(startNode);
 
-            openList.Add(startNode);
-
-            while (openList.Count > 0)
+            while (openSet.Count > 0)
             {
-                Node currentNode = openList[0];
-                for (int i = 1; i < openList.Count; i++)
-                {
-                    if (openList[i].F < currentNode.F || openList[i].F == currentNode.F && openList[i].H < currentNode.H)
-                    {
-                        currentNode = openList[i];
-                    }
-                }
+                Node currentNode = openSet.Dequeue();
 
-                openList.Remove(currentNode);
-                closedList.Add(currentNode);
-
-                if (currentNode.Position == end)
+                if (currentNode.Position == target)
                 {
                     return RetracePath(startNode, currentNode);
                 }
 
-                foreach (Vector2Int direction in directions)
+                closedSet.Add(currentNode.Position);
+
+                foreach (Vector2Int neighborPos in GetNeighbors(currentNode.Position, grid))
                 {
-                    Vector2Int neighborPos = currentNode.Position + direction;
-                    if (!IsValidPosition(neighborPos) || closedList.Contains(new Node(neighborPos)))
+                    if (closedSet.Contains(neighborPos))
                     {
                         continue;
                     }
 
-                    float newGCost = currentNode.G + GetDistance(currentNode.Position, neighborPos);
+                    float tentativeGCost = currentNode.GCost + Vector2Int.Distance(currentNode.Position, neighborPos);
                     Node neighborNode = new Node(neighborPos)
-                    {
-                        G = newGCost,
-                        H = GetDistance(neighborPos, end),
-                        Parent = currentNode
-                    };
+                        {Parent = currentNode, GCost = tentativeGCost, HCost = Vector2Int.Distance(neighborPos, target)};
 
-                    if (newGCost < neighborNode.G || !openList.Contains(neighborNode))
+                    Node existingNode = openSet.Find(node => node.Position == neighborPos);
+                    if (existingNode != null && tentativeGCost >= existingNode.GCost)
                     {
-                        neighborNode.G = newGCost;
-                        neighborNode.Parent = currentNode;
-
-                        if (!openList.Contains(neighborNode))
-                        {
-                            openList.Add(neighborNode);
-                        }
+                        continue;
                     }
+
+                    openSet.Enqueue(neighborNode);
                 }
             }
 
-            return null;
+            return null; // Path not found
         }
 
-        private bool IsValidPosition(Vector2Int pos)
+        private static List<Vector2Int> GetNeighbors(Vector2Int position, HashSet<Vector2Int> grid)
         {
-            return positions.Contains(pos);
+            List<Vector2Int> neighbors = new List<Vector2Int>();
+
+            Vector2Int[] directions = {Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right};
+            foreach (Vector2Int direction in directions)
+            {
+                Vector2Int neighborPos = position + direction;
+                if (grid.Contains(neighborPos))
+                {
+                    neighbors.Add(neighborPos);
+                }
+            }
+
+            return neighbors;
         }
 
-        private List<Vector2Int> RetracePath(Node startNode, Node endNode)
+        private static List<Vector2Int> RetracePath(Node startNode, Node endNode)
         {
             List<Vector2Int> path = new List<Vector2Int>();
             Node currentNode = endNode;
@@ -99,10 +96,79 @@ namespace Game.Rooms.Utils.Astar
             path.Reverse();
             return path;
         }
+    }
 
-        private float GetDistance(Vector2Int a, Vector2Int b)
+// PriorityQueue implementation
+    public class PriorityQueue<T>
+    {
+        private List<T> data;
+        private IComparer<T> comparer;
+
+        public PriorityQueue(IComparer<T> comparer)
         {
-            return Vector2Int.Distance(a, b);
+            this.data = new List<T>();
+            this.comparer = comparer;
         }
+
+        public void Enqueue(T item)
+        {
+            data.Add(item);
+            int childIndex = data.Count - 1;
+
+            while (childIndex > 0)
+            {
+                int parentIndex = (childIndex - 1) / 2;
+                if (comparer.Compare(data[childIndex], data[parentIndex]) >= 0) break;
+
+                T tmp = data[childIndex];
+                data[childIndex] = data[parentIndex];
+                data[parentIndex] = tmp;
+                childIndex = parentIndex;
+            }
+        }
+
+        public T Dequeue()
+        {
+            int lastIndex = data.Count - 1;
+            T frontItem = data[0];
+
+            data[0] = data[lastIndex];
+            data.RemoveAt(lastIndex);
+            lastIndex--;
+
+            int parentIndex = 0;
+            while (true)
+            {
+                int leftChildIndex = 2 * parentIndex + 1;
+                if (leftChildIndex > lastIndex) break;
+
+                int rightChildIndex = leftChildIndex + 1;
+                int bestChildIndex =
+                    (rightChildIndex > lastIndex || comparer.Compare(data[leftChildIndex], data[rightChildIndex]) < 0)
+                        ? leftChildIndex
+                        : rightChildIndex;
+
+                if (comparer.Compare(data[parentIndex], data[bestChildIndex]) <= 0) break;
+
+                T tmp = data[parentIndex];
+                data[parentIndex] = data[bestChildIndex];
+                data[bestChildIndex] = tmp;
+                parentIndex = bestChildIndex;
+            }
+
+            return frontItem;
+        }
+
+        public bool Contains(T item)
+        {
+            return data.Contains(item);
+        }
+
+        public T Find(System.Predicate<T> match)
+        {
+            return data.Find(match);
+        }
+
+        public int Count => data.Count;
     }
 }

@@ -1,5 +1,5 @@
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using DelaunayTriangulation;
 using Sirenix.OdinInspector;
@@ -11,7 +11,7 @@ using Vector2 = UnityEngine.Vector2;
 using Vector3 = UnityEngine.Vector3;
 using Game.Rooms.Utils.Mst;
 using Game.Rooms.Utils.Astar;
-using Unity.Mathematics;
+using Game.Utils;
 
 namespace Game.Rooms
 {
@@ -19,7 +19,7 @@ namespace Game.Rooms
     {
         public int Height { get; private set; }
         public int Width { get; private set; }
-        public List<Vector2Int> Units { get; private set; }
+        public HashSet<Vector2Int> Units { get; private set; }
 
         public LevelGrid(Vector2Int size)
         {
@@ -28,9 +28,9 @@ namespace Game.Rooms
             Units = GenerateGrid(size);
         }
 
-        private List<Vector2Int> GenerateGrid(Vector2Int size)
+        private HashSet<Vector2Int> GenerateGrid(Vector2Int size)
         {
-            List<Vector2Int> grid = new List<Vector2Int>();
+            HashSet<Vector2Int> grid = new HashSet<Vector2Int>();
 
             int halfWidth = size.x / 2;
             int halfHeight = size.y / 2;
@@ -60,13 +60,17 @@ namespace Game.Rooms
         private List<Vector3> _doorPositions = new List<Vector3>();
         private List<Triangle> _delaunayMesh = new List<Triangle>(); //the triangles that form the delaunay mesh
         private List<MstHelper.Edge> _hallWayEdges = new List<MstHelper.Edge>();
-        
+        private List<Vector2Int> _hallUnitPositions = new List<Vector2Int>();
+        private List<Vector2> _triPoints = new List<Vector2>();
+
         private LevelGrid _levelGrid;
         private bool _isProcessingLevel;
 
         [Button]
         private async void GenerateLevel()
         {
+            DebugHelper.ClearLog();
+            ClearLevel();
             _isProcessingLevel = true;
 
             GenerateGrid();
@@ -89,6 +93,8 @@ namespace Game.Rooms
 
                 _rooms.Clear();
             }
+
+            _triPoints.Clear();
         }
 
         private async Task GenerateRoom()
@@ -133,18 +139,15 @@ namespace Game.Rooms
             {
                 var pos = new Vector2(_rooms[i].transform.position.x, _rooms[i].transform.position.z);
                 points.Add(new Vertex(pos, i));
-                Debug.Log(pos);
             }
 
             var triangulator = new Triangulation(points);
             _delaunayMesh = triangulator.triangles;
         }
-        
-        private List<Vector2Int> _pathDebug = new List<Vector2Int>();
 
         private void SetHallways()
         {
-            List<Vector2> triPoints = new List<Vector2>();
+            _triPoints = new List<Vector2>();
 
             foreach (Triangle triangle in _delaunayMesh)
             {
@@ -153,21 +156,93 @@ namespace Game.Rooms
                 var vertPos1 = new Vector2(triangle.vertex1.position.x, triangle.vertex1.position.y);
                 var vertPos2 = new Vector2(triangle.vertex2.position.x, triangle.vertex2.position.y);
 
-                triPoints.Add(vertPos0);
-                triPoints.Add(vertPos1);
-                triPoints.Add(vertPos2);
+                if (!_triPoints.Contains(vertPos0))
+                    _triPoints.Add(vertPos0);
+                if (!_triPoints.Contains(vertPos1))
+                    _triPoints.Add(vertPos1);
+                if (!_triPoints.Contains(vertPos2))
+                    _triPoints.Add(vertPos2);
             }
 
-            _hallWayEdges = MstHelper.KruskalMST(triPoints);
+            Debug.Log("  TRIANGLES COUNT  " + _delaunayMesh.Count);
+            Debug.Log(" TRIPOINTS COUNT  " + _triPoints.Count);
 
-            //draw
-            AStar aStar = new AStar(_levelGrid.Units);
+            foreach (var point in _triPoints)
+            {
+                Debug.Log(" ---->  " + point);
+            }
 
-            var posA = Vector2Int.RoundToInt(triPoints[_hallWayEdges[0].Source]);
-            var posB = Vector2Int.RoundToInt(triPoints[_hallWayEdges[1].Source]);
+            _hallWayEdges = MstHelper.KruskalMST(_triPoints);
 
-            var pathNodes = aStar.FindPath(posA, posB);
-            _pathDebug = pathNodes;
+            //draw base halls
+            _hallUnitPositions.Clear();
+
+            Debug.Log(" HALLWAY COUNT  " + _hallWayEdges.Count);
+            Debug.Log("   ---> hallway points per edge.");
+            var index = 0;
+
+            List<Vector2Int> hallwayPoints = new List<Vector2Int>();
+            foreach (var edge in _hallWayEdges)
+            {
+                var source = Vector2Int.RoundToInt(_triPoints[edge.Source]);
+                var destination = Vector2Int.RoundToInt(_triPoints[edge.Destination]);
+
+                hallwayPoints.Add(source);
+                hallwayPoints.Add(destination);
+
+                Debug.Log("path " + index + " : " + source + "  " + destination);
+                var pathNodes = AStar.FindPath(source, destination, _levelGrid.Units, 1);
+
+                if (pathNodes != null)
+                    _hallUnitPositions.AddRange(pathNodes);
+
+                index++;
+            }
+
+            //TODO SIDE HALLS > PICK RANDOM EDGES WITHIN MESH AND ADD AS ADDITIONAL CORRIDORS.
+            var extraHallCount = _hallWayEdges.Count * _layoutData.SideHallFrequency;
+            extraHallCount = Mathf.RoundToInt(extraHallCount);
+            Debug.Log("Extra corridor count are : " + extraHallCount);
+            _additionalRouteUnitPositions = new List<Vector2Int>();
+
+            for (int i = 0; i <= extraHallCount; i++)
+            {
+                var pointA = FindUnusedPoint();
+                var pointB = FindUnusedPoint();
+                var path = AStar.FindPath(pointA, pointB, _levelGrid.Units, 1);
+                _additionalRouteUnitPositions.AddRange(path); // only for debugging.
+                _hallUnitPositions.AddRange(path); 
+            }
+            
+            ///remove the positions that are within the bounds of any rooms
+            _intersectionsDebug = LevelGenLayoutHelper.CheckPositionsWithinRoomBounds(_hallUnitPositions, _roomFloorColliders);
+        }
+
+        private List<Vector2Int> _intersectionsDebug = new List<Vector2Int>();
+        private List<Vector2Int> _additionalRouteUnitPositions = new List<Vector2Int>();
+
+        //TODO there are some awkward situations here. They overlap already existing paths ? Should check.
+        //todo probably related with rounding stuff.
+        private Vector2Int FindUnusedPoint()
+        {
+            HashSet<Vector2Int> attemptedPoints = new HashSet<Vector2Int>();
+            Vector2Int pos;
+
+            do
+            {
+                pos = Vector2Int.RoundToInt(_triPoints.GetRandomElement());
+
+                // Add the point to attempted points
+                attemptedPoints.Add(pos);
+
+                // If all points have been attempted, break to avoid infinite loop
+                if (attemptedPoints.Count >= _triPoints.Count)
+                {
+                    throw new InvalidOperationException("All points have been used.");
+                }
+            } while (_hallUnitPositions.Contains(pos) || _additionalRouteUnitPositions.Contains(pos));
+
+            return pos;
         }
 
         private async Task RandomizePositions()
@@ -188,7 +263,6 @@ namespace Game.Rooms
                 _roomFloorColliders.Add(floorCollider);
 
                 //fix half offsets
-
                 if (Mathf.RoundToInt(floorCollider.bounds.size.x) % 2 == 0) room.transform.position += Vector3.right * 0.5f;
                 if (Mathf.RoundToInt(floorCollider.bounds.size.z) % 2 == 0) room.transform.position += Vector3.up * 0.5f;
             }
@@ -231,6 +305,7 @@ namespace Game.Rooms
 
             if (_delaunayMesh == null) return;
 
+            ///ALL PATHS
             Gizmos.color = Color.white * 0.5f;
             List<Vector2> triPoints = new List<Vector2>();
 
@@ -244,10 +319,12 @@ namespace Game.Rooms
                 var vertPos1 = new Vector2(triangle.vertex1.position.x, triangle.vertex1.position.y);
                 var vertPos2 = new Vector2(triangle.vertex2.position.x, triangle.vertex2.position.y);
 
-
-                triPoints.Add((vertPos0));
-                triPoints.Add((vertPos1));
-                triPoints.Add((vertPos2));
+                if (!triPoints.Contains(vertPos0))
+                    triPoints.Add(vertPos0);
+                if (!triPoints.Contains(vertPos1))
+                    triPoints.Add(vertPos1);
+                if (!triPoints.Contains(vertPos2))
+                    triPoints.Add(vertPos2);
 
                 Gizmos.DrawLine(new Vector3(vertPos0.x, 0, vertPos0.y), new Vector3(vertPos1.x, 0, vertPos1.y));
                 Gizmos.DrawLine(new Vector3(vertPos1.x, 0, vertPos1.y), new Vector3(vertPos2.x, 0, vertPos2.y));
@@ -263,12 +340,25 @@ namespace Game.Rooms
                 Gizmos.DrawLine(source, destination);
             }
 
-            if (_pathDebug == null) return;
-            
-            foreach (var pos in _pathDebug)
+            if (_hallUnitPositions == null) return;
+
+            Gizmos.color = Color.gray * 0.9f;
+            foreach (var pos in _hallUnitPositions)
             {
-                Gizmos.color = Color.red * 0.7f;
-                Gizmos.DrawCube(new Vector3(pos.x, 0, pos.y), new Vector3(0.95f, 0.1f, 0.95f));
+                Gizmos.DrawCube(new Vector3(pos.x, -2, pos.y), new Vector3(1f, 0.1f, 1));
+            }
+
+            Gizmos.color = Color.yellow * 0.75f;
+            foreach (var pos in _additionalRouteUnitPositions)
+            {
+                Gizmos.DrawCube(new Vector3(pos.x, -3, pos.y), new Vector3(1f, 0.1f, 1));
+            }
+            
+            //show intersections
+            Gizmos.color = Color.red * 0.75f;
+            foreach (var pos in _intersectionsDebug)
+            {
+                Gizmos.DrawSphere(new Vector3(pos.x, 1, pos.y), .5f);
             }
 
             //TODO now I shall convert all this into a usable data set that corresponds to rooms - corridors etc... GG
