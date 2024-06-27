@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using DelaunayTriangulation;
 using Sirenix.OdinInspector;
@@ -12,6 +13,7 @@ using Vector3 = UnityEngine.Vector3;
 using Game.Rooms.Utils.Mst;
 using Game.Rooms.Utils.Astar;
 using Game.Utils;
+using Unity.Mathematics;
 
 namespace Game.Rooms
 {
@@ -50,17 +52,18 @@ namespace Game.Rooms
     public class LevelGenerator : MonoBehaviour
     {
         [SerializeField] private LevelLayoutData _layoutData;
+        [SerializeField] [Range(1, 10)] private int _padding = 2;
         //will do manually now.
         [SerializeField] private List<RoomView> _roomTemplates;
-
+        [SerializeField] private List<CorridorView> _corridorTemplates;
+        [Space(25)]
         [SerializeField] private List<RoomView> _rooms = new List<RoomView>();
-        [SerializeField] [Range(1, 10)] private int _padding = 2;
+        [SerializeField] private List<CorridorView> _corridors = new List<CorridorView>();
 
         private List<Collider> _roomFloorColliders = new List<Collider>();
-        private List<Vector3> _doorPositions = new List<Vector3>();
         private List<Triangle> _delaunayMesh = new List<Triangle>(); //the triangles that form the delaunay mesh
-        private List<MstHelper.Edge> _hallWayEdges = new List<MstHelper.Edge>();
-        private List<Vector2Int> _hallUnitPositions = new List<Vector2Int>();
+        private List<MstHelper.Edge> _corridorPaths = new List<MstHelper.Edge>();
+        private List<Vector2Int> _corridorFloorPositions = new List<Vector2Int>();
         private List<Vector2> _triPoints = new List<Vector2>();
 
         private LevelGrid _levelGrid;
@@ -76,7 +79,7 @@ namespace Game.Rooms
             GenerateGrid();
             await GenerateRoom();
             Triangulate();
-            SetHallways();
+            GenerateCorridors();
 
             _isProcessingLevel = false;
         }
@@ -92,6 +95,16 @@ namespace Game.Rooms
                 }
 
                 _rooms.Clear();
+            }
+
+            if (_corridors != null)
+            {
+                foreach (var corridor in _corridors)
+                {
+                    DestroyImmediate(corridor.gameObject);
+                }
+
+                _corridors.Clear();
             }
 
             _triPoints.Clear();
@@ -145,7 +158,7 @@ namespace Game.Rooms
             _delaunayMesh = triangulator.triangles;
         }
 
-        private void SetHallways()
+        private void GenerateCorridors()
         {
             _triPoints = new List<Vector2>();
 
@@ -172,17 +185,17 @@ namespace Game.Rooms
                 Debug.Log(" ---->  " + point);
             }
 
-            _hallWayEdges = MstHelper.KruskalMST(_triPoints);
+            _corridorPaths = MstHelper.KruskalMST(_triPoints);
 
             //draw base halls
-            _hallUnitPositions.Clear();
+            _corridorFloorPositions.Clear();
 
-            Debug.Log(" HALLWAY COUNT  " + _hallWayEdges.Count);
+            Debug.Log(" HALLWAY COUNT  " + _corridorPaths.Count);
             Debug.Log("   ---> hallway points per edge.");
             var index = 0;
 
             List<Vector2Int> hallwayPoints = new List<Vector2Int>();
-            foreach (var edge in _hallWayEdges)
+            foreach (var edge in _corridorPaths)
             {
                 var source = Vector2Int.RoundToInt(_triPoints[edge.Source]);
                 var destination = Vector2Int.RoundToInt(_triPoints[edge.Destination]);
@@ -194,13 +207,13 @@ namespace Game.Rooms
                 var pathNodes = AStar.FindPath(source, destination, _levelGrid.Units, 1);
 
                 if (pathNodes != null)
-                    _hallUnitPositions.AddRange(pathNodes);
+                    _corridorFloorPositions.AddRange(pathNodes);
 
                 index++;
             }
 
             //TODO SIDE HALLS > PICK RANDOM EDGES WITHIN MESH AND ADD AS ADDITIONAL CORRIDORS.
-            var extraHallCount = _hallWayEdges.Count * _layoutData.SideHallFrequency;
+            var extraHallCount = _corridorPaths.Count * _layoutData.SideHallFrequency;
             extraHallCount = Mathf.RoundToInt(extraHallCount);
             Debug.Log("Extra corridor count are : " + extraHallCount);
             _additionalRouteUnitPositions = new List<Vector2Int>();
@@ -211,11 +224,26 @@ namespace Game.Rooms
                 var pointB = FindUnusedPoint();
                 var path = AStar.FindPath(pointA, pointB, _levelGrid.Units, 1);
                 _additionalRouteUnitPositions.AddRange(path); // only for debugging.
-                _hallUnitPositions.AddRange(path); 
+                _corridorFloorPositions.AddRange(path);
             }
-            
-            ///remove the positions that are within the bounds of any rooms
-            _intersectionsDebug = LevelGenLayoutHelper.CheckPositionsWithinRoomBounds(_hallUnitPositions, _roomFloorColliders);
+
+            //remove the positions that are within the bounds of any rooms
+
+            _intersectionsDebug =
+                LevelGenLayoutHelper.CheckPositionsWithinRoomBounds(_corridorFloorPositions, _roomFloorColliders);
+            _corridorFloorPositions = _corridorFloorPositions.Except(_intersectionsDebug).ToList();
+
+            //Generate hallway floors
+
+            foreach (var corridorPos in _corridorFloorPositions)
+            {
+                var newCorridorItem = Instantiate(
+                    _corridorTemplates[0],
+                    new Vector3(corridorPos.x, 0, corridorPos.y),
+                    quaternion.identity, transform);
+                _corridors.Add(newCorridorItem);
+                newCorridorItem.Init(corridorPos, _corridorFloorPositions);
+            }
         }
 
         private List<Vector2Int> _intersectionsDebug = new List<Vector2Int>();
@@ -238,9 +266,12 @@ namespace Game.Rooms
                 // If all points have been attempted, break to avoid infinite loop
                 if (attemptedPoints.Count >= _triPoints.Count)
                 {
-                    throw new InvalidOperationException("All points have been used.");
+                    GenerateCorridors();
+                    Debug.LogWarning("Exhausted the points trying again.");
+                    break;
+                    //throw new InvalidOperationException("All points have been used.");
                 }
-            } while (_hallUnitPositions.Contains(pos) || _additionalRouteUnitPositions.Contains(pos));
+            } while (_corridorFloorPositions.Contains(pos) || _additionalRouteUnitPositions.Contains(pos));
 
             return pos;
         }
@@ -333,33 +364,35 @@ namespace Game.Rooms
 
             Gizmos.color = Color.green;
 
-            foreach (var edge in _hallWayEdges)
+            foreach (var edge in _corridorPaths)
             {
                 var source = new Vector3(triPoints[edge.Source].x, 1, triPoints[edge.Source].y);
                 var destination = new Vector3(triPoints[edge.Destination].x, 1, triPoints[edge.Destination].y);
                 Gizmos.DrawLine(source, destination);
             }
 
-            if (_hallUnitPositions == null) return;
+            if (_corridorFloorPositions == null) return;
 
-            Gizmos.color = Color.gray * 0.9f;
-            foreach (var pos in _hallUnitPositions)
+            /*Gizmos.color = Color.gray * 0.9f;
+            foreach (var pos in _corridorFloorPositions)
             {
                 Gizmos.DrawCube(new Vector3(pos.x, -2, pos.y), new Vector3(1f, 0.1f, 1));
-            }
+            }*/
 
+            /*
             Gizmos.color = Color.yellow * 0.75f;
             foreach (var pos in _additionalRouteUnitPositions)
             {
                 Gizmos.DrawCube(new Vector3(pos.x, -3, pos.y), new Vector3(1f, 0.1f, 1));
             }
-            
+
             //show intersections
             Gizmos.color = Color.red * 0.75f;
             foreach (var pos in _intersectionsDebug)
             {
                 Gizmos.DrawSphere(new Vector3(pos.x, 1, pos.y), .5f);
             }
+            */
 
             //TODO now I shall convert all this into a usable data set that corresponds to rooms - corridors etc... GG
             //%todo 15 percent chose random edges as extra corridors.
