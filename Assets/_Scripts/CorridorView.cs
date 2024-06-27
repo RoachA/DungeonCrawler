@@ -26,7 +26,7 @@ namespace Game.Rooms
         private void SetWalls(List<Vector2Int> corridorsMap)
         {
             List<Vector2Int> cardinalNeighbors = new List<Vector2Int>();
-            List<Vector2Int> freeDirections = new List<Vector2Int>();
+            List<Vector2Int> freePositions = new List<Vector2Int>();
 
             // Define the cardinal directions
             List<Vector2Int> directions = new List<Vector2Int>
@@ -47,17 +47,17 @@ namespace Game.Rooms
                 }
                 else
                 {
-                    freeDirections.Add(direction);
+                    freePositions.Add(direction + _pos);
                 }
             }
 
             _neighbors = cardinalNeighbors;
-            _freePositions = freeDirections;
+            _freePositions = freePositions;
         }
 
         private void OnDrawGizmos()
         {
-            foreach (var deg in _wallDebug)
+            foreach (var deg in _freePositions)
             {
                 Gizmos.DrawSphere(new Vector3(deg.x, 1, deg.y), .25f);
             }
