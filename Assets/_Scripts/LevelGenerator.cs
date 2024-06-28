@@ -58,7 +58,7 @@ namespace Game.Rooms
         [SerializeField] private List<CorridorView> _corridorTemplates;
         [Space(25)]
         [SerializeField] private List<RoomView> _rooms = new List<RoomView>();
-        [SerializeField] private List<CorridorView> _corridors = new List<CorridorView>();
+        private List<CorridorView> _corridors = new List<CorridorView>();
 
         private List<Collider> _roomFloorColliders = new List<Collider>();
         private List<Triangle> _delaunayMesh = new List<Triangle>(); //the triangles that form the delaunay mesh

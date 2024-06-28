@@ -1,5 +1,3 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
@@ -19,14 +17,15 @@ namespace Game.Rooms
 
         private List<Vector2Int> _wallDebug = new List<Vector2Int>();
 
-        [SerializeField] private List<Vector2Int> _neighbors = new List<Vector2Int>();
-        [SerializeField] private List<Vector2Int> _freePositions = new List<Vector2Int>();
+        private List<Vector3> _neighbors = new List<Vector3>();
+        private List<Vector3> _freePositions = new List<Vector3>();
+        private List<GameObject> _walls = new List<GameObject>();
 
         //todo cardinals are offsetted. needs fix.
         private void SetWalls(List<Vector2Int> corridorsMap)
         {
-            List<Vector2Int> cardinalNeighbors = new List<Vector2Int>();
-            List<Vector2Int> freePositions = new List<Vector2Int>();
+            List<Vector3> cardinalNeighbors = new List<Vector3>();
+            List<Vector3> freePositions = new List<Vector3>();
 
             // Define the cardinal directions
             List<Vector2Int> directions = new List<Vector2Int>
@@ -40,26 +39,42 @@ namespace Game.Rooms
             // Check each direction for a neighbor
             foreach (var direction in directions)
             {
+                var halfDir = new Vector3((float) direction.x / 2, 0, (float) direction.y / 2);
+                Vector3 pos = new Vector3(_pos.x, 0, _pos.y);
+
                 Vector2Int neighborPosition = _pos + direction;
+
                 if (corridorsMap.Contains(neighborPosition))
                 {
-                    cardinalNeighbors.Add(neighborPosition);
+                    cardinalNeighbors.Add(pos + halfDir);
                 }
                 else
                 {
-                    freePositions.Add(direction + _pos);
+                    freePositions.Add(pos + halfDir);
                 }
             }
 
+            //todo some how should avoid walling the room entries.
             _neighbors = cardinalNeighbors;
             _freePositions = freePositions;
+            var center = transform.position;
+
+            foreach (var wallPos in freePositions)
+            {
+                var wall = Instantiate(_wallObj, wallPos, Quaternion.identity, transform);
+                Vector3 targetPos = new Vector3(center.x, center.y, center.z);
+                wall.transform.LookAt(targetPos);
+                wall.transform.eulerAngles += new Vector3(0, 180, 0);
+
+                _walls.Add(wall);
+            }
         }
 
         private void OnDrawGizmos()
         {
             foreach (var deg in _freePositions)
             {
-                Gizmos.DrawSphere(new Vector3(deg.x, 1, deg.y), .25f);
+                Gizmos.DrawSphere(deg, .25f);
             }
         }
     }

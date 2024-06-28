@@ -9,7 +9,7 @@ namespace Game.Rooms
 {
     public class RoomView : MonoBehaviour
     {
-        private struct WallOrientation
+        public struct WallOrientation
         {
             public Vector3 Pos;
             public Vector3 Rot;
