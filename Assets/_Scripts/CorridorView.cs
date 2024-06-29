@@ -6,12 +6,17 @@ namespace Game.Rooms
 {
     public class CorridorView : MonoBehaviour
     {
-        [SerializeField] private Vector2Int _pos;
         [SerializeField] private GameObject _wallObj;
 
-        public void Init(Vector2Int pos, List<Vector2Int> allCorridors)
+        [Space(30)]
+        [Header("Info")]
+        [SerializeField] private Vector2Int _pos;
+        [SerializeField] private bool _isCorridorEnd;
+
+        public void Init(Vector2Int pos, List<Vector2Int> allCorridors, bool isEndTile)
         {
             _pos = pos;
+            _isCorridorEnd = isEndTile;
             SetWalls(allCorridors);
         }
 

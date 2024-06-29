@@ -6,6 +6,7 @@ namespace Game.Rooms
     public static class LevelGenLayoutHelper
     {
         private static List<Collider> _rooms;
+        public static Dictionary<int, List<Vector2Int>> CorridorsDictionary;
 
         public static List<Collider> CheckForCollidingRooms(List<Collider> colliders)
         {
@@ -121,6 +122,34 @@ namespace Game.Rooms
         {
             Vector3 closestPoint = collider.ClosestPoint(position);
             return Vector3.Distance(closestPoint, position) < Mathf.Epsilon;
+        }
+
+        public static Dictionary<int, List<Vector2Int>> RemoveListOfPositionsFromCorridor(
+            Dictionary<int, List<Vector2Int>> dictionary, List<Vector2Int> targets)
+        {
+            List<int> keysToUpdate = new List<int>();
+            Dictionary<int, List<Vector2Int>> updatedDictionary = new Dictionary<int, List<Vector2Int>>();
+
+            foreach (var kvp in dictionary)
+            {
+                var listOfPositions = kvp.Value;
+                List<Vector2Int> newValues = new List<Vector2Int>();
+
+                foreach (var position in listOfPositions)
+                {
+                    if (!targets.Contains(position))
+                    {
+                        newValues.Add(position);
+                    }
+                }
+
+                if (newValues.Count > 0)
+                {
+                    updatedDictionary[kvp.Key] = newValues;
+                }
+            }
+
+            return updatedDictionary;
         }
     }
 }

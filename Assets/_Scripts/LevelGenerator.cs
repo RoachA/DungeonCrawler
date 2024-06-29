@@ -64,7 +64,9 @@ namespace Game.Rooms
         private List<Triangle> _delaunayMesh = new List<Triangle>(); //the triangles that form the delaunay mesh
         private List<MstHelper.Edge> _corridorPaths = new List<MstHelper.Edge>();
         private List<Vector2Int> _corridorFloorPositions = new List<Vector2Int>();
+        private Dictionary<int, List<Vector2Int>> _corridorPosDictionary = new Dictionary<int, List<Vector2Int>>();
         private List<Vector2> _triPoints = new List<Vector2>();
+        private GameObject _corridorsContainer;
 
         private LevelGrid _levelGrid;
         private bool _isProcessingLevel;
@@ -78,7 +80,7 @@ namespace Game.Rooms
 
             GenerateGrid();
             await GenerateRoom();
-            Triangulate();
+            await Triangulate();
             GenerateCorridors();
 
             _isProcessingLevel = false;
@@ -108,8 +110,12 @@ namespace Game.Rooms
             }
 
             _triPoints.Clear();
+            _corridorPosDictionary.Clear();
+            _corridorFloorPositions.Clear();
         }
 
+        //Todo known issues
+        //todo somehow we shall ensure that there is a min padding between 2 rooms, preferably 2 tiles?
         private async Task GenerateRoom()
         {
             if (_roomTemplates == null || _roomTemplates.Count == 0) return;
@@ -144,7 +150,7 @@ namespace Game.Rooms
             _levelGrid = new LevelGrid(_layoutData.Bounds - Vector2Int.one);
         }
 
-        private void Triangulate()
+        private async Task Triangulate()
         {
             List<Vertex> points = new List<Vertex>();
 
@@ -158,8 +164,18 @@ namespace Game.Rooms
             _delaunayMesh = triangulator.triangles;
         }
 
+        //Todo known issues
+        //todo if two rooms try to reach the same room their designated paths eventually collide.
+        //todo this causes overlapping corridor pieces. 
+        //todo when a new path is generated, it should check if designated tiles are already occupied. if so, it should ignore those.
         private void GenerateCorridors()
         {
+            if (_corridorsContainer == null)
+                _corridorsContainer = Instantiate(new GameObject("Corridors"), Vector3.zero, Quaternion.identity, transform);
+
+            _corridorPosDictionary.Clear();
+            _corridorFloorPositions.Clear();
+
             _triPoints = new List<Vector2>();
 
             foreach (Triangle triangle in _delaunayMesh)
@@ -209,6 +225,7 @@ namespace Game.Rooms
                 if (pathNodes != null)
                     _corridorFloorPositions.AddRange(pathNodes);
 
+                _corridorPosDictionary.Add(index, pathNodes); //keep data seperately.
                 index++;
             }
 
@@ -225,28 +242,38 @@ namespace Game.Rooms
                 var path = AStar.FindPath(pointA, pointB, _levelGrid.Units, 1);
                 _additionalRouteUnitPositions.AddRange(path); // only for debugging.
                 _corridorFloorPositions.AddRange(path);
+                _corridorPosDictionary.Add(_corridorPosDictionary.Keys.Count, path);
             }
+
+            Debug.Log(" Registered Corridors Count ---> " + _corridorPosDictionary.Count);
 
             //remove the positions that are within the bounds of any rooms
 
-            _intersectionsDebug =
+            _tilesThatIntersectWithRooms =
                 LevelGenLayoutHelper.CheckPositionsWithinRoomBounds(_corridorFloorPositions, _roomFloorColliders);
-            _corridorFloorPositions = _corridorFloorPositions.Except(_intersectionsDebug).ToList();
+            _corridorFloorPositions = _corridorFloorPositions.Except(_tilesThatIntersectWithRooms).ToList();
+            _corridorPosDictionary =
+                LevelGenLayoutHelper.RemoveListOfPositionsFromCorridor(_corridorPosDictionary, _tilesThatIntersectWithRooms);
 
+            Debug.Log(" Registered Corridors After Cleaning ---> " + _corridorPosDictionary.Count);
             //Generate hallway floors
-
-            foreach (var corridorPos in _corridorFloorPositions)
+            foreach (var kvp in _corridorPosDictionary)
             {
-                var newCorridorItem = Instantiate(
-                    _corridorTemplates[0],
-                    new Vector3(corridorPos.x, 0, corridorPos.y),
-                    quaternion.identity, transform);
-                _corridors.Add(newCorridorItem);
-                newCorridorItem.Init(corridorPos, _corridorFloorPositions);
+                for (var i = 0; i < kvp.Value.Count; i++)
+                {
+                    var corridorTilePos = kvp.Value[i];
+                    var newCorridorItem = Instantiate(
+                        _corridorTemplates[0],
+                        new Vector3(corridorTilePos.x, 0, corridorTilePos.y),
+                        quaternion.identity, _corridorsContainer.transform);
+                    _corridors.Add(newCorridorItem);
+                    newCorridorItem.Init(corridorTilePos, _corridorFloorPositions,
+                        i == 0 || i == kvp.Value.Count - 1); // finds the last end first nodes of each corridor, sets as end node.
+                }
             }
         }
 
-        private List<Vector2Int> _intersectionsDebug = new List<Vector2Int>();
+        private List<Vector2Int> _tilesThatIntersectWithRooms = new List<Vector2Int>();
         private List<Vector2Int> _additionalRouteUnitPositions = new List<Vector2Int>();
 
         //TODO there are some awkward situations here. They overlap already existing paths ? Should check.
@@ -319,6 +346,7 @@ namespace Game.Rooms
             await FixCollidingRoomsAsync();
         }
 
+
         private void OnDrawGizmos()
         {
             //show bounds
@@ -373,13 +401,12 @@ namespace Game.Rooms
 
             if (_corridorFloorPositions == null) return;
 
-            /*Gizmos.color = Color.gray * 0.9f;
+            Gizmos.color = Color.gray * 0.9f;
             foreach (var pos in _corridorFloorPositions)
             {
                 Gizmos.DrawCube(new Vector3(pos.x, -2, pos.y), new Vector3(1f, 0.1f, 1));
-            }*/
+            }
 
-            /*
             Gizmos.color = Color.yellow * 0.75f;
             foreach (var pos in _additionalRouteUnitPositions)
             {
@@ -388,11 +415,10 @@ namespace Game.Rooms
 
             //show intersections
             Gizmos.color = Color.red * 0.75f;
-            foreach (var pos in _intersectionsDebug)
+            foreach (var pos in _tilesThatIntersectWithRooms)
             {
                 Gizmos.DrawSphere(new Vector3(pos.x, 1, pos.y), .5f);
             }
-            */
 
             //TODO now I shall convert all this into a usable data set that corresponds to rooms - corridors etc... GG
             //%todo 15 percent chose random edges as extra corridors.
