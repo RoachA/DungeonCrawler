@@ -147,7 +147,7 @@ namespace Game.Rooms
         {
             _doors.Clear();
             List<int> wallIndexes = new List<int>();
-            var doorCount = Random.Range(1, _roomConstructionData.MaxDoorCount);
+            var doorCount = Random.Range(0, _roomConstructionData.MaxDoorCount);
 
             for (int i = 0; i < doorCount; i++)
             {

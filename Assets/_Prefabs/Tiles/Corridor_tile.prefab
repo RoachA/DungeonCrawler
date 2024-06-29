@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 7716669760780533829}
   - component: {fileID: 6259898796333280397}
   m_Layer: 0
-  m_Name: corridor_tile
+  m_Name: Corridor_tile
   m_TagString: Room
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -62,7 +62,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: 1d9c153de28e51e42a6276f1ecf3ea06, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -97,4 +97,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _pos: {x: 0, y: 0}
-  _wallObj: {fileID: 919132149155446097, guid: 538140e91cac34c4a969b8d5ef8282a7, type: 3}
+  _wallObj: {fileID: 798541084979146184, guid: a800d04e77aa88f49a0e9ac4bdfe01bc, type: 3}

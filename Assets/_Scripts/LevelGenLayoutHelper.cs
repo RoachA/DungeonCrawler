@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,23 +5,23 @@ namespace Game.Rooms
 {
     public static class LevelGenLayoutHelper
     {
-        private static List<Collider> _objectsToCheck;
+        private static List<Collider> _rooms;
 
         public static List<Collider> CheckForCollidingRooms(List<Collider> colliders)
         {
-            _objectsToCheck = colliders;
+            _rooms = colliders;
             var collidingRooms = new List<Collider>();
 
-            for (int i = 0; i < _objectsToCheck.Count; i++)
+            for (int i = 0; i < _rooms.Count; i++)
             {
-                for (int j = i + 1; j < _objectsToCheck.Count; j++)
+                for (int j = i + 1; j < _rooms.Count; j++)
                 {
-                    if (CheckCollision(_objectsToCheck[i], _objectsToCheck[j]))
+                    if (CheckCollision(_rooms[i], _rooms[j]))
                     {
-                        if (collidingRooms.Contains(_objectsToCheck[i]) == false)
-                            collidingRooms.Add(_objectsToCheck[i]);
-                        if (collidingRooms.Contains(_objectsToCheck[j]) == false)
-                            collidingRooms.Add(_objectsToCheck[j]);
+                        if (collidingRooms.Contains(_rooms[i]) == false)
+                            collidingRooms.Add(_rooms[i]);
+                        if (collidingRooms.Contains(_rooms[j]) == false)
+                            collidingRooms.Add(_rooms[j]);
                     }
                 }
             }
@@ -39,10 +38,10 @@ namespace Game.Rooms
 
             return false;
         }
-        
+
         public static bool IsWithinBounds(Vector3 vector, Vector2 bounds)
         {
-            bounds -= new Vector2(5, 5); 
+            bounds -= new Vector2(5, 5);
             return vector.x >= -bounds.x / 2 && vector.x <= bounds.x / 2 &&
                    vector.z >= -bounds.y / 2 && vector.z <= bounds.y / 2;
         }
@@ -65,7 +64,7 @@ namespace Game.Rooms
                     return Vector3.zero; // Fallback, though this should never be reached
             }
         }
-        
+
         public static List<Vector2Int> CheckPositionsWithinRoomBounds(List<Vector2Int> positions, List<Collider> colliders)
         {
             List<Vector2Int> positionsWithinBounds = new List<Vector2Int>();
@@ -83,6 +82,39 @@ namespace Game.Rooms
             }
 
             return positionsWithinBounds;
+        }
+
+        public static bool IsPosInARoom(Vector2Int pos)
+        {
+            if (AreThereRooms() == false) return false;
+
+            foreach (var col in _rooms)
+            {
+                if (IsPositionWithinCollider(new Vector3(pos.x, 0, pos.y), col))
+                    return true;
+            }
+
+            return false;
+        }
+
+        public static bool IsPosInARoom(Vector3 pos)
+        {
+            if (AreThereRooms() == false) return false;
+
+            foreach (var col in _rooms)
+            {
+                if (IsPositionWithinCollider(pos, col))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool AreThereRooms()
+        {
+            if (_rooms == null) return false;
+            if (_rooms.Count == 0) return false;
+            return true;
         }
 
         public static bool IsPositionWithinCollider(Vector3 position, Collider collider)
